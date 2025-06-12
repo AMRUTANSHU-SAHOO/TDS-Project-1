@@ -35,6 +35,7 @@ def query_docs(data: QueryRequest):
         input=data.query,
         model="text-embedding-3-small"
     )
+    print("Embedding response:", response)
     query_embedding = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
 
     # Search FAISS index
