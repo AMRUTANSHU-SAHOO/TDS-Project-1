@@ -8,9 +8,11 @@ import numpy as np
 import faiss
 import pickle
 from openai import OpenAI
+from typing import List
 
 app = FastAPI()
 
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,24 +28,22 @@ faiss_index = faiss.read_index("tds_discourse_index.faiss")
 with open("tds_discourse_metadata.pkl", "rb") as f:
     metadata = pickle.load(f)
 
-# Load JSONL embeddings (not used directly in this endpoint)
+# Load precomputed embeddings (in case needed for debug)
 embeddings = []
 with open("output.jsonl", "r") as f:
     for i, line in enumerate(f):
         try:
             data = json.loads(line)
             if "embedding" not in data:
-                print(f"[Line {i}] Missing 'embedding' key: {data}")
                 continue
             embeddings.append(data["embedding"])
-        except json.JSONDecodeError as e:
-            print(f"[Line {i}] JSON decode error: {e}")
+        except json.JSONDecodeError:
+            continue
 
-# Request schema
+# Define request body
 class QueryRequest(BaseModel):
     query: str
 
-# Endpoint
 @app.post("/query")
 async def query_handler(request: QueryRequest):
     user_query = request.query
@@ -51,7 +51,7 @@ async def query_handler(request: QueryRequest):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     try:
-        # Generate embedding
+        # Get query embedding
         response = client.embeddings.create(
             input=user_query,
             model="text-embedding-3-small"
@@ -69,13 +69,12 @@ async def query_handler(request: QueryRequest):
 
     results = []
     for idx in indices[0]:
-        if idx >= len(metadata):
-            continue
-        meta = metadata[idx]
-        results.append({
-            "content": meta.get("content", "No content"),
-            "source": meta.get("url", "Unknown")
-        })
+        if idx < len(metadata):
+            meta = metadata[idx]
+            results.append({
+                "content": meta.get("content", "No content"),
+                "source": meta.get("url", "Unknown")
+            })
 
     return {
         "answer": results[0]["content"] if results else "No relevant answer found.",
