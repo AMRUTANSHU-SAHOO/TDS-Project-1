@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import json
+import os
 import numpy as np
 import faiss
 import pickle
@@ -38,8 +39,6 @@ with open("output.jsonl", "r") as f:
             embeddings.append(data["embedding"])
         except json.JSONDecodeError as e:
             print(f"[Line {i}] JSON decode error: {e}")
-
-embedding_matrix = np.array(embeddings).astype("float32")
 
 class QueryRequest(BaseModel):
     query: str
@@ -84,11 +83,13 @@ async def query_docs(request: Request):
 
     results = []
     for idx in indices[0]:
-        result = {
-            "content": metadata[idx]["text"],
-            "source": metadata[idx].get("source", "Unknown")
-        }
-        results.append(result)
+        if idx >= len(metadata):
+            continue
+        meta = metadata[idx]
+        results.append({
+            "content": meta.get("content", "No content"),  # ✅ FIXED
+            "source": meta.get("url", "Unknown")           # ✅ FIXED
+        })
 
     return {
         "answer": results[0]["content"] if results else "No relevant answer found.",
