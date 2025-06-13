@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 import json
@@ -15,10 +15,20 @@ faiss_index = faiss.read_index("tds_discourse_index.faiss")
 with open("tds_discourse_metadata.pkl", "rb") as f:
     metadata = pickle.load(f)
 
-# Load precomputed embeddings
+# ✅ Safe loading of precomputed embeddings
+embeddings = []
 with open("output.jsonl", "r") as f:
-    embeddings = [json.loads(line)["embedding"] for line in f]
-    embedding_matrix = np.array(embeddings).astype("float32")
+    for i, line in enumerate(f):
+        try:
+            data = json.loads(line)
+            if "embedding" not in data:
+                print(f"[Line {i}] Missing 'embedding' key: {data}")
+                continue
+            embeddings.append(data["embedding"])
+        except json.JSONDecodeError as e:
+            print(f"[Line {i}] JSON decode error: {e}")
+
+embedding_matrix = np.array(embeddings).astype("float32")
 
 class QueryRequest(BaseModel):
     query: str
@@ -36,6 +46,7 @@ def query_docs(data: QueryRequest):
         model="text-embedding-3-small"
     )
     print("Embedding response:", response)
+
     query_embedding = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
 
     # Search FAISS index
