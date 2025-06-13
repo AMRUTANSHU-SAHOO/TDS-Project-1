@@ -7,6 +7,7 @@ import json
 import numpy as np
 import faiss
 import pickle
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -47,26 +48,35 @@ class QueryRequest(BaseModel):
 @app.api_route("/query", methods=["GET", "POST"])
 async def query_docs(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"message": "Use POST method with a JSON body"}, status_code=200)
+        return JSONResponse(
+            content={"message": "Use POST method with a JSON body"},
+            status_code=200,
+        )
 
     # POST request
     try:
         body = await request.json()
         data = QueryRequest(**body)
     except Exception as e:
-        return JSONResponse(content={"error": f"Invalid request format: {str(e)}"}, status_code=400)
-
-    from openai import OpenAI
+        return JSONResponse(
+            content={"error": f"Invalid request format: {str(e)}"},
+            status_code=400,
+        )
+    
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+    
+    try:
     # Get query embedding
-    response = client.embeddings.create(
-        input=data.query,
-        model="text-embedding-3-small"
-    )
-    print("Embedding response:", response)
-
-    query_embedding = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
+        response = client.embeddings.create(
+            input=data.query,
+            model="text-embedding-3-small"
+        )
+        query_embedding = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
+    except Exception as e:
+        return JSONResponse(
+            content={"error": f"Embedding failed: {str(e)}"},
+            status_code=500,
+        )
 
     # Search FAISS index
     top_k = 3
@@ -80,4 +90,10 @@ async def query_docs(request: Request):
         }
         results.append(result)
 
-    return {"results": results}
+    return {
+        "answer": results[0]["content"] if results else "No relevant answer found.",
+        "links": [
+            {"url": r["source"], "text": r["content"][:100] + "..."}
+            for r in results if r["source"] != "Unknown"
+        ]
+    }
