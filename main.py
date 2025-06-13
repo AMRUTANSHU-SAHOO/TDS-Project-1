@@ -1,12 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import json
 import numpy as np
 import faiss
 import pickle
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or specify their domain if known
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load FAISS index
 faiss_index = faiss.read_index("tds_discourse_index.faiss")
@@ -32,12 +42,21 @@ embedding_matrix = np.array(embeddings).astype("float32")
 
 class QueryRequest(BaseModel):
     query: str
-    documents: List[str]
+    documents: Optional[List[str]] = None
 
-@app.post("/query")
-def query_docs(data: QueryRequest):
+@app.api_route("/query", methods=["GET", "POST"])
+async def query_docs(request: Request):
+    if request.method == "GET":
+        return JSONResponse(content={"message": "Use POST method with a JSON body"}, status_code=200)
+
+    # POST request
+    try:
+        body = await request.json()
+        data = QueryRequest(**body)
+    except Exception as e:
+        return JSONResponse(content={"error": f"Invalid request format: {str(e)}"}, status_code=400)
+
     from openai import OpenAI
-
     client = OpenAI()
 
     # Get query embedding
