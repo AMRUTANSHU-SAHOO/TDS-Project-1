@@ -57,7 +57,7 @@ async def query_docs(request: Request):
         return JSONResponse(content={"error": f"Invalid request format: {str(e)}"}, status_code=400)
 
     from openai import OpenAI
-    client = OpenAI()
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # Get query embedding
     response = client.embeddings.create(
