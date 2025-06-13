@@ -1,8 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Optional
 import json
 import os
 import numpy as np
@@ -14,7 +13,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or specify their domain if known
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,7 +26,7 @@ faiss_index = faiss.read_index("tds_discourse_index.faiss")
 with open("tds_discourse_metadata.pkl", "rb") as f:
     metadata = pickle.load(f)
 
-# ✅ Safe loading of precomputed embeddings
+# Load JSONL embeddings (not used directly in this endpoint)
 embeddings = []
 with open("output.jsonl", "r") as f:
     for i, line in enumerate(f):
@@ -40,21 +39,21 @@ with open("output.jsonl", "r") as f:
         except json.JSONDecodeError as e:
             print(f"[Line {i}] JSON decode error: {e}")
 
+# Request schema
 class QueryRequest(BaseModel):
     query: str
 
+# Endpoint
 @app.post("/query")
 async def query_handler(request: QueryRequest):
     user_query = request.query
-    # Your actual logic goes here, like embedding + retrieval
-    # return {"answer": f"You asked: {user_query}"}    
-    
+
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    
+
     try:
-    # Get query embedding
+        # Generate embedding
         response = client.embeddings.create(
-            input=data.query,
+            input=user_query,
             model="text-embedding-3-small"
         )
         query_embedding = np.array(response.data[0].embedding, dtype="float32").reshape(1, -1)
@@ -64,7 +63,7 @@ async def query_handler(request: QueryRequest):
             status_code=500,
         )
 
-    # Search FAISS index
+    # Search FAISS
     top_k = 3
     scores, indices = faiss_index.search(query_embedding, top_k)
 
@@ -74,8 +73,8 @@ async def query_handler(request: QueryRequest):
             continue
         meta = metadata[idx]
         results.append({
-            "content": meta.get("content", "No content"),  # ✅ FIXED
-            "source": meta.get("url", "Unknown")           # ✅ FIXED
+            "content": meta.get("content", "No content"),
+            "source": meta.get("url", "Unknown")
         })
 
     return {
