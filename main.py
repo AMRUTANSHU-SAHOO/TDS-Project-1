@@ -42,25 +42,12 @@ with open("output.jsonl", "r") as f:
 
 class QueryRequest(BaseModel):
     query: str
-    documents: Optional[List[str]] = None
 
-@app.api_route("/query", methods=["GET", "POST"])
-async def query_docs(request: Request):
-    if request.method == "GET":
-        return JSONResponse(
-            content={"message": "Use POST method with a JSON body"},
-            status_code=200,
-        )
-
-    # POST request
-    try:
-        body = await request.json()
-        data = QueryRequest(**body)
-    except Exception as e:
-        return JSONResponse(
-            content={"error": f"Invalid request format: {str(e)}"},
-            status_code=400,
-        )
+@app.post("/query")
+async def query_handler(request: QueryRequest):
+    user_query = request.query
+    # Your actual logic goes here, like embedding + retrieval
+    # return {"answer": f"You asked: {user_query}"}    
     
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
